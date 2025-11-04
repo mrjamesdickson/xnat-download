@@ -17,15 +17,16 @@ import requests
 from requests.auth import HTTPBasicAuth
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--output',required = True,dest='output',help='Path to the output directory')
+parser.add_argument('--output',required = False,dest='output',help='Path to the output directory')
 parser.add_argument('--user', required=True,type=str,dest='xnat_user', help='XNAT username')
 parser.add_argument('--pass',type=str,dest='xnat_pass', help='XNAT password')
 parser.add_argument('--host',  required=True,type=str,dest='xnat_host', help='XNAT hostname')
-parser.add_argument('--project', required=True, type=str,dest='xnat_project', help='XNAT project')
-parser.add_argument('--session', required=False, type=str,dest='xnat_session', help='XNAT session')
+parser.add_argument('--project', required=True, type=str,dest='xnat_project', help='XNAT project ID')
+parser.add_argument('--session', required=False, type=str,dest='xnat_session', help='XNAT session/experiment label to download')
 parser.add_argument('--download', required=False, type=str, default='both', choices=['experiments', 'assessors', 'both'], dest='download_mode', help='What to download: experiments, assessors, or both (default: both)')
 parser.add_argument('--experiment-type', required=False, type=str,dest='xnat_experiment_type', help='XNAT experiment type filter (e.g., xnat:mrSessionData, xnat:petSessionData)')
 parser.add_argument('--assessor-type', required=False, type=str,dest='xnat_assessor_type', help='XNAT assessor type filter (e.g., icr:RoiCollection)')
+parser.add_argument('--list-types', required=False, action='store_true', dest='list_types', help='List all experiment and assessor types found in the project and exit')
 
 args = parser.parse_args()
 
@@ -50,6 +51,45 @@ def login(host,username,password):
     print(response.content)
     return response.content.decode("utf-8")
 
+
+# List all types in project
+def list_types(collectionURL,myProjectID):
+    print('Scanning project ... ' + myProjectID)
+    jsession=login(collectionURL,username,password)
+
+    experiment_types = set()
+    assessor_types = set()
+
+    with xnat.connect(collectionURL,jsession=jsession) as mySession:
+        myProject= mySession.projects[myProjectID]
+        mySubjectsList = myProject.subjects.values()
+        for s in mySubjectsList:
+            mySubjectID = s.label
+            mySubject = myProject.subjects[mySubjectID]
+            myExperimentsList = mySubject.experiments.values()
+
+            for e in myExperimentsList:
+                myExperimentType = type(e).__name__ if not hasattr(e, 'xsi_type') else e.xsi_type
+                experiment_types.add(myExperimentType)
+
+                myExperiment = mySubject.experiments[e.label]
+                myAssessorsList = myExperiment.assessors.values()
+                for a in myAssessorsList:
+                    myAssessorType = type(a).__name__ if not hasattr(a, 'xsi_type') else a.xsi_type
+                    assessor_types.add(myAssessorType)
+
+    print('\nExperiment types found:')
+    for exp_type in sorted(experiment_types):
+        print(f'  {exp_type}')
+
+    print('\nAssessor types found:')
+    if assessor_types:
+        for ass_type in sorted(assessor_types):
+            print(f'  {ass_type}')
+    else:
+        print('  (none)')
+
+    return
 
 # Download data from XNAT in .zip format
 def xnat_collection(myWorkingDirectory,collectionURL,myProjectID):
@@ -158,4 +198,10 @@ def xnat_collection(myWorkingDirectory,collectionURL,myProjectID):
 print(VERSION)
 #
 #
-xnat_collection(myWorkingDirectory,collectionURL,myProjectID)
+if args.list_types:
+    list_types(collectionURL,myProjectID)
+else:
+    if not args.output:
+        print("Error: --output is required when downloading data")
+        exit(1)
+    xnat_collection(myWorkingDirectory,collectionURL,myProjectID)
