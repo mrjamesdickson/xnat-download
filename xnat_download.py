@@ -30,7 +30,7 @@ parser.add_argument('--list-types', required=False, action='store_true', dest='l
 
 args = parser.parse_args()
 
-VERSION='xnat_download_v1.1.0'
+VERSION='xnat_download_v1.1.1'
 
 myWorkingDirectory = args.output 
 collectionURL = args.xnat_host 
