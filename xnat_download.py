@@ -32,7 +32,7 @@ parser.add_argument('--list-types', required=False, action='store_true', dest='l
 
 args = parser.parse_args()
 
-VERSION='xnat_download_v1.1.2'
+VERSION='xnat_download_v1.1.3'
 
 myWorkingDirectory = args.output 
 collectionURL = args.xnat_host 
@@ -196,7 +196,7 @@ def xnat_collection(myWorkingDirectory,collectionURL,myProjectID):
 
             # Process experiments
             for e in myExperimentsList:
-
+              try:
                 myExperimentID = e.label
                 myExperimentType = type(e).__name__ if not hasattr(e, 'xsi_type') else e.xsi_type
 
@@ -254,7 +254,9 @@ def xnat_collection(myWorkingDirectory,collectionURL,myProjectID):
                                     myExperiment = mySubject.experiments[myExperimentID]
                                     # Retry download on next loop iteration
                                 else:
-                                    print(f'✗ Error downloading {experiment_filename}: {e}')
+                                    # Log the failed experiment and continue to next
+                                    print(f'✗ Failed to download experiment "{myExperimentID}": {e}')
+                                    print(f'  Continuing with remaining downloads...')
                                     break  # Don't retry non-auth errors
 
                 # Process assessors for this experiment if mode allows
@@ -314,8 +316,20 @@ def xnat_collection(myWorkingDirectory,collectionURL,myProjectID):
                                         myAssessor = myExperiment.assessors[myAssessorID]
                                         # Retry download on next loop iteration
                                     else:
-                                        print(f'✗ Error downloading {assessor_filename}: {e}')
+                                        # Log the failed assessor and continue to next
+                                        print(f'✗ Failed to download assessor "{myAssessorID}": {e}')
+                                        print(f'  Continuing with remaining downloads...')
                                         break  # Don't retry non-auth errors
+
+              except Exception as exp_error:
+                # Catch any unexpected error for this experiment and continue to next
+                try:
+                    exp_label = myExperimentID
+                except NameError:
+                    exp_label = getattr(e, 'label', 'unknown')
+                print(f'✗ Failed to process experiment "{exp_label}": {exp_error}')
+                print(f'  Continuing with remaining downloads...')
+                continue
 
             # Update progress after each subject
             download_stats['subjects_processed'] += 1
